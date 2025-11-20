@@ -327,7 +327,8 @@ static struct AVTextFormatSection sections[] = {
 static const OptionDef *options;
 
 /* FFprobe context */
-static const char *input_filename;
+static const char **input_filenames = NULL;
+static int nb_input_files = 0;
 static const char *print_input_filename;
 static const AVInputFormat *iformat = NULL;
 static const char *output_filename = NULL;
@@ -2805,17 +2806,24 @@ static int opt_show_entries(void *optctx, const char *opt, const char *arg)
 
 static int opt_input_file(void *optctx, const char *arg)
 {
-    if (input_filename) {
-        av_log(NULL, AV_LOG_ERROR,
-                "Argument '%s' provided as input filename, but '%s' was already specified.\n",
-                arg, input_filename);
-        return AVERROR(EINVAL);
-    }
+    const char **tmp;
+    char *filename;
+
     if (!strcmp(arg, "-"))
         arg = "fd:";
-    input_filename = av_strdup(arg);
-    if (!input_filename)
+    
+    filename = av_strdup(arg);
+    if (!filename)
         return AVERROR(ENOMEM);
+
+    tmp = av_realloc_array(input_filenames, nb_input_files + 1, sizeof(*input_filenames));
+    if (!tmp) {
+        av_free(filename);
+        return AVERROR(ENOMEM);
+    }
+    
+    input_filenames = tmp;
+    input_filenames[nb_input_files++] = filename;
 
     return 0;
 }
@@ -3288,17 +3296,25 @@ int main(int argc, char **argv)
         if (do_show_pixel_formats)
             ffprobe_show_pixel_formats(tctx);
 
-        if (!input_filename &&
+        if (nb_input_files == 0 &&
             ((do_show_format || do_show_programs || do_show_stream_groups || do_show_streams || do_show_chapters || do_show_packets || do_show_error) ||
              (!do_show_program_version && !do_show_library_versions && !do_show_pixel_formats))) {
             show_usage();
             av_log(NULL, AV_LOG_ERROR, "You have to specify one input file.\n");
             av_log(NULL, AV_LOG_ERROR, "Use -h to get full help or, even better, run 'man %s'.\n", program_name);
             ret = AVERROR(EINVAL);
-        } else if (input_filename) {
-            ret = probe_file(tctx, input_filename, print_input_filename);
-            if (ret < 0 && do_show_error)
-                show_error(tctx, ret);
+        } else if (nb_input_files > 0) {
+            int file_ret;
+            ret = 0;
+            for (i = 0; i < nb_input_files; i++) {
+                file_ret = probe_file(tctx, input_filenames[i], print_input_filename);
+                if (file_ret < 0) {
+                    if (do_show_error)
+                        show_error(tctx, file_ret);
+                    if (ret >= 0)
+                        ret = file_ret;
+                }
+            }
         }
 
         input_ret = ret;
@@ -3319,7 +3335,9 @@ int main(int argc, char **argv)
 end:
     av_freep(&output_format);
     av_freep(&output_filename);
-    av_freep(&input_filename);
+    for (i = 0; i < nb_input_files; i++)
+        av_freep(&input_filenames[i]);
+    av_freep(&input_filenames);
     av_freep(&print_input_filename);
     av_freep(&read_intervals);
 
