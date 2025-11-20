@@ -3304,10 +3304,16 @@ int main(int argc, char **argv)
             av_log(NULL, AV_LOG_ERROR, "Use -h to get full help or, even better, run 'man %s'.\n", program_name);
             ret = AVERROR(EINVAL);
         } else if (nb_input_files > 0) {
+            int file_ret;
+            ret = 0;
             for (i = 0; i < nb_input_files; i++) {
-                ret = probe_file(tctx, input_filenames[i], print_input_filename);
-                if (ret < 0 && do_show_error)
-                    show_error(tctx, ret);
+                file_ret = probe_file(tctx, input_filenames[i], print_input_filename);
+                if (file_ret < 0) {
+                    if (do_show_error)
+                        show_error(tctx, file_ret);
+                    if (ret >= 0)
+                        ret = file_ret;
+                }
             }
         }
 
