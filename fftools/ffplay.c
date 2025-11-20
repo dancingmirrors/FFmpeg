@@ -2625,8 +2625,15 @@ static int create_hwaccel(AVBufferRef **device_ctx)
         return 0;
 
     type = av_hwdevice_find_type_by_name(hwaccel);
-    if (type == AV_HWDEVICE_TYPE_NONE)
-        return AVERROR(ENOTSUP);
+    if (type == AV_HWDEVICE_TYPE_NONE) {
+        av_log(NULL, AV_LOG_FATAL, "Unrecognized hwaccel: %s.\n", hwaccel);
+        av_log(NULL, AV_LOG_FATAL, "Supported hwaccels: ");
+        type = AV_HWDEVICE_TYPE_NONE;
+        while ((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
+            av_log(NULL, AV_LOG_FATAL, "%s ", av_hwdevice_get_type_name(type));
+        av_log(NULL, AV_LOG_FATAL, "\n");
+        return AVERROR(EINVAL);
+    }
 
     // Try to derive from Vulkan if renderer is available
     if (vk_renderer) {
