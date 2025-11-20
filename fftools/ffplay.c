@@ -2001,6 +2001,11 @@ static int configure_video_filters(AVFilterGraph *graph, VideoState *is, const c
         }
     }
 
+    /* Download hardware frames to system memory if not using vulkan renderer */
+    if (!vk_renderer && frame->hw_frames_ctx) {
+        INSERT_FILT("hwdownload", NULL);
+    }
+
     if ((ret = configure_filtergraph(graph, vfilters, filt_src, last_filter)) < 0)
         goto fail;
 
@@ -2623,23 +2628,23 @@ static int create_hwaccel(AVBufferRef **device_ctx)
     if (type == AV_HWDEVICE_TYPE_NONE)
         return AVERROR(ENOTSUP);
 
-    if (!vk_renderer) {
-        av_log(NULL, AV_LOG_ERROR, "Vulkan renderer is not available\n");
-        return AVERROR(ENOTSUP);
+    // Try to derive from Vulkan if renderer is available
+    if (vk_renderer) {
+        ret = vk_renderer_get_hw_dev(vk_renderer, &vk_dev);
+        if (ret < 0)
+            return ret;
+
+        ret = av_hwdevice_ctx_create_derived(device_ctx, type, vk_dev, 0);
+        if (!ret)
+            return 0;
+
+        if (ret != AVERROR(ENOSYS))
+            return ret;
+
+        av_log(NULL, AV_LOG_WARNING, "Derive %s from vulkan not supported.\n", hwaccel);
     }
 
-    ret = vk_renderer_get_hw_dev(vk_renderer, &vk_dev);
-    if (ret < 0)
-        return ret;
-
-    ret = av_hwdevice_ctx_create_derived(device_ctx, type, vk_dev, 0);
-    if (!ret)
-        return 0;
-
-    if (ret != AVERROR(ENOSYS))
-        return ret;
-
-    av_log(NULL, AV_LOG_WARNING, "Derive %s from vulkan not supported.\n", hwaccel);
+    // Create hwaccel device independently
     ret = av_hwdevice_ctx_create(device_ctx, type, NULL, NULL, 0);
     return ret;
 }
@@ -3837,7 +3842,7 @@ int main(int argc, char **argv)
 #ifdef SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
 #endif
-        if (hwaccel && !enable_vulkan) {
+        if (hwaccel && !strcmp(hwaccel, "vulkan") && !enable_vulkan) {
             av_log(NULL, AV_LOG_INFO, "Enable vulkan renderer to support hwaccel %s\n", hwaccel);
             enable_vulkan = 1;
         }
