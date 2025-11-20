@@ -3837,6 +3837,10 @@ int main(int argc, char **argv)
 #ifdef SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
 #endif
+        if (hwaccel && !strcmp(hwaccel, "vulkan") && !enable_vulkan) {
+            av_log(NULL, AV_LOG_INFO, "Enable vulkan renderer to support hwaccel %s\n", hwaccel);
+            enable_vulkan = 1;
+        }
         if (enable_vulkan) {
             vk_renderer = vk_get_renderer();
             if (vk_renderer) {
