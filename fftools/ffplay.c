@@ -940,6 +940,7 @@ static enum AVColorSpace sdl_supported_color_spaces[] = {
     AVCOL_SPC_BT709,
     AVCOL_SPC_BT470BG,
     AVCOL_SPC_SMPTE170M,
+    AVCOL_SPC_UNSPECIFIED,
 };
 
 static enum AVAlphaMode sdl_supported_alpha_modes[] = {
