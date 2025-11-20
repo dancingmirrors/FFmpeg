@@ -940,6 +940,7 @@ static enum AVColorSpace sdl_supported_color_spaces[] = {
     AVCOL_SPC_BT709,
     AVCOL_SPC_BT470BG,
     AVCOL_SPC_SMPTE170M,
+    AVCOL_SPC_UNSPECIFIED,
 };
 
 static enum AVAlphaMode sdl_supported_alpha_modes[] = {
@@ -2731,11 +2732,8 @@ static int stream_component_open(VideoState *is, int stream_index)
 
     if (avctx->codec_type == AVMEDIA_TYPE_VIDEO) {
         ret = create_hwaccel(&avctx->hw_device_ctx);
-        if (ret < 0) {
-            avcodec_free_context(&avctx);
-            av_dict_free(&opts);
-            do_exit(NULL);
-        }
+        if (ret < 0)
+            goto fail;
     }
 
     if ((ret = avcodec_open2(avctx, codec, &opts)) < 0) {
