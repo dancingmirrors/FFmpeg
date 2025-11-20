@@ -2001,6 +2001,11 @@ static int configure_video_filters(AVFilterGraph *graph, VideoState *is, const c
         }
     }
 
+    /* Download hardware frames to system memory if not using vulkan renderer */
+    if (!vk_renderer && frame->hw_frames_ctx) {
+        INSERT_FILT("hwdownload", NULL);
+    }
+
     if ((ret = configure_filtergraph(graph, vfilters, filt_src, last_filter)) < 0)
         goto fail;
 
