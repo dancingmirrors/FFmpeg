@@ -124,6 +124,7 @@ Documentation options:
   --disable-manpages       do not build man documentation pages
   --disable-podpages       do not build POD documentation pages
   --disable-txtpages       do not build text documentation pages
+  --disable-examples       do not install example source files
 
 Component options:
   --disable-avdevice       disable libavdevice build
@@ -2092,6 +2093,10 @@ DOCUMENT_LIST="
     txtpages
 "
 
+INSTALL_EXAMPLE_LIST="
+    examples
+"
+
 FEATURE_LIST="
     ftrapv
     gray
@@ -2143,6 +2148,7 @@ SUBSYSTEM_LIST="
 # COMPONENT_LIST needs to come last to ensure correct dependency checking
 CONFIG_LIST="
     $DOCUMENT_LIST
+    $INSTALL_EXAMPLE_LIST
     $EXAMPLE_LIST
     $EXTERNAL_LIBRARY_LIST
     $EXTERNAL_AUTODETECT_LIBRARY_LIST
@@ -4272,6 +4278,7 @@ intrinsics="none"
 # configurable options
 enable $PROGRAM_LIST
 enable $DOCUMENT_LIST
+enable $INSTALL_EXAMPLE_LIST
 enable $EXAMPLE_LIST
 enable $LIBRARY_LIST
 enable stripping
@@ -8490,7 +8497,13 @@ cat > $TMPH <<EOF
 #define CC_IDENT "$(c_escape ${cc_ident:-Unknown compiler})"
 #define OS_NAME $target_os
 #define EXTERN_PREFIX "${extern_prefix}"
-#define EXTERN_ASM ${extern_prefix}
+EOF
+if [ -n "$extern_prefix" ]; then
+    printf "#define EXTERN_ASM %s\n" "${extern_prefix}" >>$TMPH
+else
+    printf "#define EXTERN_ASM\n" >>$TMPH
+fi
+cat >> $TMPH <<EOF
 #define BUILDSUF "$build_suffix"
 #define SLIBSUF "$SLIBSUF"
 #define SWS_MAX_FILTER_SIZE $sws_max_filter_size
