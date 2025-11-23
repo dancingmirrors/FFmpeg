@@ -42,16 +42,20 @@ OUTDIRS += doc/examples
 
 DOXY_INPUT += $(EXAMPLES:%$(PROGSSUF)$(EXESUF)=%.c)
 
-install: install-examples
+install: install-examples-yes
 
-install-examples: $(EXAMPLES_FILES)
+install-examples-yes:
+
+install-examples-$(CONFIG_EXAMPLES): $(EXAMPLES_FILES)
 	$(Q)mkdir -p "$(DATADIR)/examples"
 	$(INSTALL) -m 644 $(EXAMPLES_FILES) "$(DATADIR)/examples"
 	$(INSTALL) -m 644 $(EXAMPLE_MAKEFILE:%=%.example) "$(DATADIR)/examples/Makefile"
 
-uninstall: uninstall-examples
+uninstall: uninstall-examples-yes
 
-uninstall-examples:
+uninstall-examples-yes:
+
+uninstall-examples-$(CONFIG_EXAMPLES):
 	$(RM) -r "$(DATADIR)/examples"
 
 examplesclean:
