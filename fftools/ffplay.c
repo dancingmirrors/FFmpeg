@@ -940,6 +940,7 @@ static enum AVColorSpace sdl_supported_color_spaces[] = {
     AVCOL_SPC_BT709,
     AVCOL_SPC_BT470BG,
     AVCOL_SPC_SMPTE170M,
+    AVCOL_SPC_UNSPECIFIED,
 };
 
 static enum AVAlphaMode sdl_supported_alpha_modes[] = {
@@ -2001,6 +2002,11 @@ static int configure_video_filters(AVFilterGraph *graph, VideoState *is, const c
         }
     }
 
+    /* Download hardware frames to system memory if not using vulkan renderer */
+    if (!vk_renderer && frame->hw_frames_ctx) {
+        INSERT_FILT("hwdownload", NULL);
+    }
+
     if ((ret = configure_filtergraph(graph, vfilters, filt_src, last_filter)) < 0)
         goto fail;
 
@@ -2620,27 +2626,41 @@ static int create_hwaccel(AVBufferRef **device_ctx)
         return 0;
 
     type = av_hwdevice_find_type_by_name(hwaccel);
-    if (type == AV_HWDEVICE_TYPE_NONE)
-        return AVERROR(ENOTSUP);
-
-    if (!vk_renderer) {
-        av_log(NULL, AV_LOG_ERROR, "Vulkan renderer is not available\n");
-        return AVERROR(ENOTSUP);
+    if (type == AV_HWDEVICE_TYPE_NONE) {
+        av_log(NULL, AV_LOG_FATAL, "Unrecognized hwaccel: %s.\n", hwaccel);
+        av_log(NULL, AV_LOG_FATAL, "Supported hwaccels: ");
+        type = AV_HWDEVICE_TYPE_NONE;
+        while ((type = av_hwdevice_iterate_types(type)) != AV_HWDEVICE_TYPE_NONE)
+            av_log(NULL, AV_LOG_FATAL, "%s ", av_hwdevice_get_type_name(type));
+        av_log(NULL, AV_LOG_FATAL, "\n");
+        return AVERROR(EINVAL);
     }
 
-    ret = vk_renderer_get_hw_dev(vk_renderer, &vk_dev);
-    if (ret < 0)
-        return ret;
+    // Try to derive from Vulkan if renderer is available
+    if (vk_renderer) {
+        ret = vk_renderer_get_hw_dev(vk_renderer, &vk_dev);
+        if (ret < 0) {
+            av_log(NULL, AV_LOG_FATAL, "Failed to get Vulkan device for hwaccel %s: %s\n", hwaccel, av_err2str(ret));
+            return ret;
+        }
 
-    ret = av_hwdevice_ctx_create_derived(device_ctx, type, vk_dev, 0);
-    if (!ret)
-        return 0;
+        ret = av_hwdevice_ctx_create_derived(device_ctx, type, vk_dev, 0);
+        if (!ret)
+            return 0;
 
-    if (ret != AVERROR(ENOSYS))
-        return ret;
+        if (ret != AVERROR(ENOSYS)) {
+            av_log(NULL, AV_LOG_FATAL, "Failed to create derived hwaccel device %s: %s\n", hwaccel, av_err2str(ret));
+            return ret;
+        }
 
-    av_log(NULL, AV_LOG_WARNING, "Derive %s from vulkan not supported.\n", hwaccel);
+        av_log(NULL, AV_LOG_WARNING, "Derive %s from vulkan not supported.\n", hwaccel);
+    }
+
+    // Create hwaccel device independently
     ret = av_hwdevice_ctx_create(device_ctx, type, NULL, NULL, 0);
+    if (ret < 0) {
+        av_log(NULL, AV_LOG_FATAL, "Failed to create hwaccel device %s: %s\n", hwaccel, av_err2str(ret));
+    }
     return ret;
 }
 
@@ -2712,8 +2732,11 @@ static int stream_component_open(VideoState *is, int stream_index)
 
     if (avctx->codec_type == AVMEDIA_TYPE_VIDEO) {
         ret = create_hwaccel(&avctx->hw_device_ctx);
-        if (ret < 0)
-            goto fail;
+        if (ret < 0) {
+            avcodec_free_context(&avctx);
+            av_dict_free(&opts);
+            do_exit(NULL);
+        }
     }
 
     if ((ret = avcodec_open2(avctx, codec, &opts)) < 0) {
@@ -3856,7 +3879,7 @@ int main(int argc, char **argv)
 #ifdef SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR
         SDL_SetHint(SDL_HINT_VIDEO_X11_NET_WM_BYPASS_COMPOSITOR, "0");
 #endif
-        if (hwaccel && !enable_vulkan) {
+        if (hwaccel && !strcmp(hwaccel, "vulkan") && !enable_vulkan) {
             av_log(NULL, AV_LOG_INFO, "Enable vulkan renderer to support hwaccel %s\n", hwaccel);
             enable_vulkan = 1;
         }
