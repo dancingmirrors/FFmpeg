@@ -2672,9 +2672,11 @@ static int create_hwaccel(AVBufferRef **device_ctx)
     if (ret < 0)
         return ret;
 
+#if 0
     ret = av_hwdevice_ctx_create_derived(device_ctx, type, vk_dev, 0);
     if (!ret)
         return 0;
+#endif
 
     if (ret != AVERROR(ENOSYS))
         return ret;
