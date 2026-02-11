@@ -19,6 +19,10 @@
 #ifndef AVUTIL_HWCONTEXT_OPENCL_H
 #define AVUTIL_HWCONTEXT_OPENCL_H
 
+#ifndef CL_TARGET_OPENCL_VERSION
+#define CL_TARGET_OPENCL_VERSION 300
+#endif
+
 #ifdef __APPLE__
 #include <OpenCL/cl.h>
 #else
